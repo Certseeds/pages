@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Programmable-BPM</title>
+    <style>
+        /* 简单的样式，使按钮居中显示 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            /* 使元素垂直排列 */
+            height: 100vh;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+
+        #playButton,
+        #readButton {
+            padding: 15px 30px;
+            font-size: 16px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin: 10px;
+            /* 添加按钮之间的间距 */
+        }
+
+        #playButton:hover,
+        #readButton:hover {
+            background-color: #1558b0;
+        }
+
+        #inputBox {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 300px;
+            /* 设置输入框宽度 */
+            height: 200px;
+            /* 设置输入框高度 */
+            margin: 10px;
+        }
+
+        .blue {
+            background-color: #0D407F;
+            /* Ultramarine */
+        }
+
+        .red {
+            background-color: #8A0303;
+            /* BloodRed */
+        }
+    </style>
+</head>
+
+<body>
+    <button id="playButton">播放声音</button>
+    <div class="display">BPM: <span id="bpmDisplay">60</span></div>
+    <div class="display">剩余步数: <span id="stepsRemainingDisplay">0</span></div>
+    <textarea id="inputBox" placeholder="bpm and minutes per line" rows="10"></textarea>
+    <button id="readButton">读取输入</button>
+    <button id="toggleSoundButton" class="red">开关声音</button>
+
+    <script>
+        let isSoundOn = true;
+        const _default = [{
+            mills: 1000,
+            times: 60
+        }];// 默认节奏
+        let dealArray = [..._default];
+        let bpm = 60;
+        let remain = 0;
+        const parseInput = function (text) {
+            const lines = text.split('\n');
+            const result = lines
+                .map(line => line.trim())
+                .map((line) => {
+                    const parts = line.split(' ');
+                    const bpm = parseInt(parts[0], 10);
+                    const mills = parseInt(parts[1], 10) * 60;
+                    const betweenMills = Math.ceil(60 * 1000 / bpm);
+                    const times = Math.floor(bpm * mills / 60);
+                    return {
+                        mills: betweenMills,
+                        times: times
+                    };
+                });
+            return result;
+        }
+        // it just works
+        const createSound = function (ac, K, N) {
+            const T = ac.sampleRate;
+            const M = T * 0.1;
+            const L = ac.createBuffer(1, M, T);
+            const e = L.getChannelData(0);
+            const S = 2 * Math.PI / T * K;
+            const R = 100 / T;
+            const P = 200 / T;
+            const O = 500 / T;
+
+            for (let Q = 0; Q < M; Q++) {
+                e[Q] = N * (0.09 * Math.exp(-Q * R) * Math.sin(S * Q) + 0.34 * Math.exp(-Q * P) * Math.sin(2 * S * Q) + 0.57 * Math.exp(-Q * O) * Math.sin(6 * S * Q));
+            }
+
+            return L;
+        }
+        // And again, it just works. 
+        const playSound = function (ac, sound) {
+            const note = ac.createBufferSource();
+            note.buffer = sound;
+            note.connect(ac.destination);
+            const t = ac.currentTime;
+            note.start(t);
+            note.stop(t + 0.05);
+        }
+
+        const playWithInternal = function (listOfMillsAndTimes) {
+            if (listOfMillsAndTimes.length === 0) {
+                console.log("rec end");
+                return;
+            }
+            console.log(listOfMillsAndTimes);
+            const [first_mills_times, ...restElements] = listOfMillsAndTimes;
+            const {
+                mills: millsBetween,
+                times
+            } = first_mills_times;
+            const countMax = times;
+            document.getElementById('bpmDisplay').textContent = (60000 / millsBetween).toFixed(2);
+
+            let count = 0;
+            const intervalID = setInterval(() => {
+                if (count >= times || !isSoundOn) {
+                    clearInterval(intervalID);
+                    playWithInternal(restElements);
+                }
+                console.log(`${intervalID} ${millsBetween} ${times} ${count}`);
+                count = count + 1;
+                document.getElementById('stepsRemainingDisplay').textContent = (countMax - count).toString();
+
+                if (isSoundOn) {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const sound440 = createSound(audioContext, 440, 0.5);
+                    playSound(audioContext, sound440);
+                }
+            }, millsBetween);
+        }
+
+        document.getElementById('playButton').addEventListener('click', () => {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const sound440 = createSound(audioContext, 440, 0.5);
+
+            playSound(audioContext, sound440);
+
+            playWithInternal(dealArray);
+
+        });
+        document.getElementById('readButton').addEventListener('click', () => {
+            const inputValue = document.getElementById('inputBox').value;
+            console.log('输入的内容是:', inputValue);
+            dealArray = parseInput(inputValue);
+            console.log(dealArray);
+        });
+
+        document.getElementById('toggleSoundButton').addEventListener('click', () => {
+            const toggleButton = document.getElementById('toggleSoundButton');
+            if (isSoundOn) {
+                toggleButton.classList.remove('red');
+                toggleButton.classList.add('blue');
+            } else {
+                toggleButton.classList.remove('blue');
+                toggleButton.classList.add('red');
+            }
+            isSoundOn = !isSoundOn;
+            console.log('声音开关状态:', isSoundOn ? '开' : '关');
+            dealArray = [..._default];
+        });
+
+
+    </script>
+</body>
+
+</html>
