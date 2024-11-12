@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
     <meta property="og:url" content="https://pages.certseeds.com/bpm/bpm.html">
     <meta property="og:site_name" content="Programmable-BPM">
     <meta property="og:title" content="Programmable-BPM">
@@ -89,6 +90,7 @@
     <button id="toggleSoundButton" class="red">开关声音</button>
 
     <script>
+        let isLocked = false;// false为不上锁, 默认
         let isSoundOn = true;
         const _default = [{
             mills: 1000,
@@ -142,7 +144,7 @@
         }
 
         const playWithInternal = function (listOfMillsAndTimes) {
-            if (listOfMillsAndTimes.length === 0) {
+            if (listOfMillsAndTimes.length === 0 || isLocked) {
                 console.log("rec end");
                 return;
             }
@@ -156,10 +158,15 @@
             document.getElementById('bpmDisplay').textContent = (60000 / millsBetween).toFixed(2);
 
             let count = 0;
+            isLocked = true;
             const intervalID = setInterval(() => {
                 if (count >= times || !isSoundOn) {
                     clearInterval(intervalID);
-                    playWithInternal(restElements);
+                    isLocked = false;
+                    if (isSoundOn) {
+                        playWithInternal(restElements);
+                    }
+                    return;
                 }
                 console.log(`${intervalID} ${millsBetween} ${times} ${count}`);
                 count = count + 1;
