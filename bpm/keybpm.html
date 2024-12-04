@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+    <meta property="og:url" content="https://pages.certseeds.com/bpm/bpm.html">
+    <meta property="og:site_name" content="Programmable-BPM">
+    <meta property="og:title" content="Programmable-BPM">
+    <meta property="og:description" content="A Programmable BPM page">
+    <meta property="og:locale" content="zh-CN">
+    <meta property="og:type" content="website">
+
+    <link rel="author" href="http://blog.certseeds.com/" title="Certseeds">
+    <link rel="me" href="http://blog.certseeds.com/" title="Certseeds">
+
+    <meta property="dc.creator" name="author" content="Certseeds">
+    <meta property="dc.description" name="description" content="A Programmable BPM page">
+    <meta property="dc.identifier" name="url" content="https://pages.certseeds.com/bpm/bpm.html">
+    <meta property="dc.relation" content="https://pages.certseeds.com/bpm/bpm.html">
+    <meta property="dc.language" name="language" content="zh-CN">
+    <meta property="dc.rights" name="copyright" content="Certseeds publish it under AGPL-3.0-or-later">
+    <meta property="dc.subject" name="keywords" content="spa,frontend,html,css,js,webaudio">
+
+    <title>Programmable-BPM</title>
+    <style>
+        /* 简单的样式，使按钮居中显示 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            /* 使元素垂直排列 */
+            height: 100vh;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+
+        #playButton,
+        #readButton {
+            padding: 15px 30px;
+            font-size: 16px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin: 10px;
+            /* 添加按钮之间的间距 */
+        }
+
+        #playButton:hover,
+        #readButton:hover {
+            background-color: #1558b0;
+        }
+
+        #inputBox {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 300px;
+            /* 设置输入框宽度 */
+            height: 200px;
+            /* 设置输入框高度 */
+            margin: 10px;
+        }
+
+        .blue {
+            background-color: #0D407F;
+            /* Ultramarine */
+        }
+
+        .red {
+            background-color: #8A0303;
+            /* BloodRed */
+        }
+    </style>
+    <style>
+        #key-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .key-block {
+            width: 100px;
+            height: 100px;
+            background-color: #00aaff;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 10px;
+            font-size: 24px;
+            transition: background-color 0.3s;
+            user-select: none;
+        }
+
+        .key-block.active {
+            background-color: grey;
+        }
+
+        #circle {
+            width: 50px;
+            height: 50px;
+            background-color: orange;
+            border-radius: 50%;
+            margin: 50px auto;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            5% {
+                transform: scale(0.95);
+                /* 放大到1.5倍 */
+            }
+
+            50% {
+                transform: scale(1.5);
+                /* 放大到1.5倍 */
+            }
+
+            90% {
+                transform: scale(0.95);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <button id="playButton">播放声音</button>
+    <div>总和步数: <span id="sumSteps">0</span></div>
+    <div>当前步数: <span id="nowSteps">0</span></div>
+    <div class="display">BPM: <span id="bpmDisplay">60</span></div>
+    <div id="key-container">
+        <div id="down-key" class="key-block">DOWN</div>
+        <div id="up-key" class="key-block">UP</div>
+    </div>
+    <!-- 添加一个橙色圆 -->
+    <div id="circle"></div>
+    <script>
+        let isSoundOn = false;
+        let bpm = 60;
+        let count = 0;
+        let countSum = 0;
+        const multiply = bpm * 1000;
+        // it just works
+        const createSound = (ac, K, N) => {
+            const T = ac.sampleRate;
+            const M = T * 0.1;
+            const L = ac.createBuffer(1, M, T);
+            const e = L.getChannelData(0);
+            const S = 2 * Math.PI / T * K;
+            const R = 100 / T;
+            const P = 200 / T;
+            const O = 500 / T;
+
+            for (let Q = 0; Q < M; Q++) {
+                e[Q] = N * (0.09 * Math.exp(-Q * R) * Math.sin(S * Q) + 0.34 * Math.exp(-Q * P) * Math.sin(2 * S * Q) + 0.57 * Math.exp(-Q * O) * Math.sin(6 * S * Q));
+            }
+
+            return L;
+        }
+        // And again, it just works. 
+        const playSound = (ac, sound) => {
+
+            const playAudio = new Promise(() => {
+                const note = ac.createBufferSource();
+                note.buffer = sound;
+                note.connect(ac.destination);
+                const t = ac.currentTime;
+                note.start(t);
+                note.stop(t + 0.05);
+            });
+
+            const animateion = new Promise(() => {
+                const circle = document.getElementById('circle');
+                circle.style.animation = `pulse ${multiply / 2000 / bpm}s ease-in-out`;
+                circle.addEventListener('animationend', function handler() {
+                    circle.style.animation = '';
+                    circle.removeEventListener('animationend', handler);
+                });
+            });
+
+            Promise.all([playAudio, animateion])
+                .then(() => {
+                    console.log('both is done');
+                });
+        }
+        const sleep = async (ms) => {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        const ber = () => {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const sound440 = createSound(audioContext, 440, 0.5);
+            playSound(audioContext, sound440);
+        }
+        const playWithInternal = async () => {
+            while (isSoundOn) {
+                ber();
+                await sleep(multiply / bpm);
+                count += 1;
+                document.getElementById('nowSteps').textContent = `${count}`;
+            }
+            console.log("The cycle ends here, we must be better.")
+        }
+        document.getElementById('playButton').addEventListener('click', () => {
+            ber();
+            isSoundOn = !isSoundOn;
+            sleep(1000)
+                .then(() => {
+                    if (!isSoundOn) {
+                        return;
+                    } else {
+                        playWithInternal();
+                    }
+                });
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowUp') {
+                bpm += 1;
+                document.getElementById('up-key').classList.add('active');
+            } else if (event.key === 'ArrowRight') {
+                bpm += 10;
+                document.getElementById('up-key').classList.add('active');
+            } else if (event.key === 'ArrowDown') {
+                bpm -= 1;
+                document.getElementById('down-key').classList.add('active');
+            } else if (event.key === 'ArrowLeft') {
+                bpm -= 10;
+                document.getElementById('down-key').classList.add('active');
+            }
+        });
+        document.addEventListener('keyup', (event) => {
+            if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+                document.getElementById('up-key').classList.remove('active');
+            } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+                document.getElementById('down-key').classList.remove('active');
+            }
+            document.getElementById('bpmDisplay').textContent = `${bpm}`;
+            countSum += count;
+            document.getElementById('sumSteps').textContent = `${countSum}`;
+            count = 0;
+            document.getElementById('nowSteps').textContent = `${count}`;
+        });
+        document.getElementById('down-key').addEventListener('click', () => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+            setTimeout(() => {
+                document.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' }))
+            }, multiply / 10 / bpm);
+        });
+        document.getElementById('up-key').addEventListener('click', () => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+            setTimeout(() => {
+                document.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowUp' }))
+            }, multiply / 10 / bpm);
+        });
+    </script>
+</body>
+
+</html>
