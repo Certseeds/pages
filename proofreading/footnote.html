@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'nonce-2E1deApVvsloedEEHSqc'">
+    <link rel="icon" href="data:,">
+    <meta property="og:url" content="https://pages.certseeds.com/proofreading/footnote.html">
+    <meta property="og:site_name" content="proofreading footnote">
+    <meta property="og:title" content="proofreading footnote">
+    <meta property="og:description" content="将括号内注解替换为脚注的工具">
+    <meta property="og:locale" content="zh-CN">
+    <meta property="og:type" content="website">
+
+    <link rel="author" href="http://blog.certseeds.com/" title="Certseeds">
+    <link rel="me" href="http://blog.certseeds.com/" title="Certseeds">
+
+    <meta property="dc.creator" name="author" content="Certseeds">
+    <meta property="dc.description" name="description" content="将括号内注解替换为脚注的工具">
+    <meta property="dc.identifier" name="url" content="https://pages.certseeds.com/proofreading/footnote.html">
+    <meta property="dc.relation" content="https://pages.certseeds.com/proofreading/footnote.html">
+    <meta property="dc.language" name="language" content="zh-CN">
+    <meta property="dc.rights" name="copyright" content="Certseeds publish it under AGPL-3.0-or-later">
+    <meta property="dc.subject" name="keywords" content="spa,frontend,html,css,js,pages">
+    <title>将括号内注解替换为脚注的工具</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        input[type="number"] {
+            width: 60px;
+        }
+
+        button {
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+
+        .controls {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>将小括号内的注解替换为脚注的小工具</h1>
+    <div class="controls">
+        <label for="fileInput">上传文件(UTF-8): </label>
+        <input type="file" id="fileInput" accept=".txt, .md">
+        <br>
+        <label for="startCount">起始编号: </label>
+        <input type="number" id="startCount" value="1" min="1">
+    </div>
+    <textarea id="inputText" placeholder="请在此粘贴文本或等待文件加载..."></textarea>
+    <div class="controls">
+        <button id="btnChinese">替换中文括号为英文括号</button>
+        <button id="btnEnglish">处理英文括号 ( )</button>
+    </div>
+    <div class="controls">
+        <button id="btnDownload">下载处理后的文件</button>
+        <button id="btnCopy">复制到剪切板</button>
+    </div>
+
+    <script nonce="2E1deApVvsloedEEHSqc">
+        // 获取DOM元素
+        const fileInput = document.getElementById('fileInput');
+        const inputText = document.getElementById('inputText');
+        const startCountInput = document.getElementById('startCount');
+        const btnEnglish = document.getElementById('btnEnglish');
+        const btnChinese = document.getElementById('btnChinese');
+        const btnDownload = document.getElementById('btnDownload');
+        const btnCopy = document.getElementById('btnCopy');
+
+        // 读取上传的纯文本文件
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (evt) {
+                    inputText.value = evt.target.result;
+                };
+                reader.readAsText(file, 'UTF-8');
+            }
+        });
+
+        // 处理括号匹配算法（用于英文括号，产生脚注）
+        function processText(regex) {
+            let text = inputText.value;
+            let startCount = parseInt(startCountInput.value) || 1;
+            let count = startCount;
+            let references = [];
+
+            // 用正则替换所有括号匹配，回调参数：match（原匹配），group1（括号内文本）
+            text = text.replace(regex, function (match, group1) {
+                const refTag = `[^${count}]`;
+                references.push(`${refTag}: ${group1}\n\n`);
+                count++;
+                return refTag;
+            });
+
+            // 将参考文献附加到文本末尾
+            text += "\n" + references.join('');
+            inputText.value = text;
+        }
+
+        // 英文括号匹配按钮，保持原有逻辑
+        btnEnglish.addEventListener('click', () => {
+            const regexEnglish = /\(([^)]+)\)/g;
+            processText(regexEnglish);
+        });
+
+        // 新的“替换中文括号为英文括号”按钮：将中文括号直接替换为英文括号，不生成脚注
+        btnChinese.addEventListener('click', () => {
+            let text = inputText.value;
+            // 将所有中文括号替换为英文括号
+            text = text.replace(/（/g, '(').replace(/）/g, ')');
+            inputText.value = text;
+        });
+
+        btnDownload.addEventListener('click', () => {
+            const blob = new Blob([inputText.value], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+
+            // 获取上传文件的文件名并添加 "-fd" 后缀
+            const originalFileName = fileInput.files[0]?.name || 'processed.txt';
+            const fileNameParts = originalFileName.split('.');
+            const newFileName = fileNameParts.length > 1
+                ? `${fileNameParts.slice(0, -1).join('.')}-fd.${fileNameParts[fileNameParts.length - 1]}`
+                : `${originalFileName}-fd`;
+
+            // 创建下载链接
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = newFileName; // 设置新的文件名
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 复制文本到剪切板
+        btnCopy.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(inputText.value);
+                alert('文本已复制到剪切板');
+            } catch (err) {
+                alert('复制失败，请手动复制');
+            }
+        });
+    </script>
+</body>
+
+</html>
