@@ -79,6 +79,38 @@
             background-color: #8A0303;
             /* BloodRed */
         }
+
+        #circle {
+            width: 50px;
+            height: 50px;
+            background-color: orange;
+            border-radius: 50%;
+            margin: 50px auto;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            5% {
+                transform: scale(0.95);
+                /* 放大到1.5倍 */
+            }
+
+            50% {
+                transform: scale(1.5);
+                /* 放大到1.5倍 */
+            }
+
+            90% {
+                transform: scale(0.95);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
     </style>
 </head>
 
@@ -86,10 +118,18 @@
     <button id="playButton">播放声音</button>
     <div class="display">BPM: <span id="bpmDisplay">60</span></div>
     <div class="display">剩余步数: <span id="stepsRemainingDisplay">0</span></div>
+    <!-- 新增：显示 listOfMillsAndTimes 的列表 -->
+    <div class="display">
+        <div>当前序列:</div>
+        <ul id="sequenceList" style="text-align: left; max-width: 400px; margin: 10px auto; font-size: 14px;">
+            <!-- 动态生成的列表项 -->
+        </ul>
+    </div>
     <textarea id="inputBox" placeholder="bpm and minutes per line" rows="10"></textarea>
     <button id="readButton">读取输入</button>
     <button id="toggleSoundButton" class="red">开关声音</button>
-
+    <!-- 添加一个橙色圆 -->
+    <div id="circle"></div>
     <script>
         let isLocked = false;// false为不上锁, 默认
         let isSoundOn = true;
@@ -100,14 +140,15 @@
         let dealArray = [..._default];
         let bpm = 60;
         let remain = 0;
+        const multiply = bpm * 1000;
         const parseInput = function (text) {
             const lines = text.split('\n');
             const result = lines
                 .map(line => line.trim())
                 .map((line) => {
                     const parts = line.split(' ');
-                    const bpm = parseInt(parts[0], 10);
-                    const mills = parseInt(parts[1], 10) * 60;
+                    const bpm = parseFloat(parts[0], 10);
+                    const mills = parseFloat(parts[1], 10) * 60;
                     const betweenMills = Math.ceil(60 * 1000 / bpm);
                     const times = Math.floor(bpm * mills / 60);
                     return {
@@ -117,6 +158,45 @@
                 });
             return result;
         }
+
+        // 更新序列列表显示，包含剩余步数信息
+        const updateSequenceList = function (allSegments, currentIndex, remainingStepsArray) {
+            const sequenceList = document.getElementById('sequenceList');
+            sequenceList.innerHTML = '';
+
+            allSegments.forEach((item, index) => {
+                const li = document.createElement('li');
+                const bpm = (60000 / item.mills).toFixed(1);
+                const minutes = (item.times * item.mills / 60000).toFixed(2);
+
+                let displayText = `第${index + 1}段: BPM ${bpm}, 时长 ${minutes}分钟`;
+
+                if (index < currentIndex) {
+                    // 已完成的段落
+                    displayText += `, 已完成 ✓`;
+                    li.style.color = '#28a745';
+                    li.style.textDecoration = 'line-through';
+                } else if (index === currentIndex) {
+                    // 当前正在进行的段落
+                    const remaining = remainingStepsArray[index - currentIndex] || 0;
+                    displayText += `, 剩余 ${remaining} 步`;
+                    li.style.fontWeight = 'bold';
+                    li.style.color = '#1a73e8';
+                    li.style.backgroundColor = '#f0f7ff';
+                    li.style.padding = '2px 5px';
+                    li.style.borderRadius = '3px';
+                } else {
+                    // 未开始的段落
+                    const totalSteps = remainingStepsArray[index - currentIndex] || item.times;
+                    displayText += `, 待执行 ${totalSteps} 步`;
+                    li.style.color = '#6c757d';
+                }
+
+                li.textContent = displayText;
+                sequenceList.appendChild(li);
+            });
+        };
+
         // it just works
         const createSound = function (ac, K, N) {
             const T = ac.sampleRate;
@@ -130,65 +210,95 @@
 
             for (let Q = 0; Q < M; Q++) {
                 e[Q] = N * (0.09 * Math.exp(-Q * R) * Math.sin(S * Q) + 0.34 * Math.exp(-Q * P) * Math.sin(2 * S * Q) + 0.57 * Math.exp(-Q * O) * Math.sin(6 * S * Q));
-            }
+            } return L;
+        };
 
-            return L;
-        }
-        // And again, it just works. 
+        // And again, it just works.
         const playSound = function (ac, sound) {
-            const note = ac.createBufferSource();
-            note.buffer = sound;
-            note.connect(ac.destination);
-            const t = ac.currentTime;
-            note.start(t);
-            note.stop(t + 0.05);
-        }
+            const playAudio = new Promise(() => {
+                const note = ac.createBufferSource();
+                note.buffer = sound;
+                note.connect(ac.destination);
+                const t = ac.currentTime;
+                note.start(t);
+                note.stop(t + 0.05);
+            });
 
-        const playWithInternal = function (listOfMillsAndTimes) {
-            if (listOfMillsAndTimes.length === 0 || isLocked) {
-                console.log("rec end");
+            const animation = new Promise(() => {
+                const circle = document.getElementById('circle');
+                if (circle) {
+                    const heartBpm = (((60 / bpm) / 2) * 0.8);
+                    circle.style.animation = `pulse ${heartBpm}s ease-in-out`;
+                    circle.addEventListener('animationend', function handler() {
+                        circle.style.animation = '';
+                        circle.removeEventListener('animationend', handler);
+                    });
+                }
+            });
+            Promise.all([playAudio, animation]).then(() => {
+                console.log('both is done');
+            });
+        };
+        const playWithInternal = function (listOfMillsAndTimes, currentSegmentIndex = 0, currentBeatCount = 0) {
+            if (listOfMillsAndTimes.length === 0 || !isSoundOn) {
+                console.log("playback completed or stopped");
+                isLocked = false;
                 return;
             }
-            console.log(listOfMillsAndTimes);
-            const [first_mills_times, ...restElements] = listOfMillsAndTimes;
-            const {
-                mills: millsBetween,
-                times
-            } = first_mills_times;
-            const countMax = times;
-            document.getElementById('bpmDisplay').textContent = (60000 / millsBetween).toFixed(2);
 
-            let count = 0;
-            isLocked = true;
-            const intervalID = setInterval(() => {
-                if (count >= times || !isSoundOn) {
-                    clearInterval(intervalID);
+            const currentSegment = listOfMillsAndTimes[currentSegmentIndex];
+            const { mills: millsBetween, times } = currentSegment;
+
+            // 如果是新段落的开始
+            if (currentBeatCount === 0) {
+                console.log(`Starting segment ${currentSegmentIndex}:`, currentSegment);
+                document.getElementById('bpmDisplay').textContent = (60000 / millsBetween).toFixed(2);
+                isLocked = true;
+            }
+
+            // 处理当前节拍
+            console.log(`${millsBetween} ${times} ${currentBeatCount}`);
+            document.getElementById('stepsRemainingDisplay').textContent = (times - currentBeatCount - 1).toString();
+
+            if (isSoundOn) {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const sound440 = createSound(audioContext, 440, 0.5);
+                playSound(audioContext, sound440);
+            }
+
+            // 计算剩余步数：当前段的剩余步数 + 后续段的总步数
+            const remainingSteps = [times - currentBeatCount - 1]; // 当前段剩余步数
+            for (let i = currentSegmentIndex + 1; i < listOfMillsAndTimes.length; i++) {
+                remainingSteps.push(listOfMillsAndTimes[i].times);
+            }
+
+            console.log('remainingSteps:', remainingSteps);
+            updateSequenceList([...dealArray], currentSegmentIndex, remainingSteps);
+
+            // 递归调用下一个状态
+            setTimeout(() => {
+                const nextBeatCount = currentBeatCount + 1;
+
+                if (nextBeatCount >= times) {
+                    // 当前段落完成，移动到下一段落
                     isLocked = false;
-                    if (isSoundOn) {
-                        playWithInternal(restElements);
+                    const nextSegmentIndex = currentSegmentIndex + 1;
+                    if (nextSegmentIndex < listOfMillsAndTimes.length) {
+                        playWithInternal(listOfMillsAndTimes, nextSegmentIndex, 0);
+                    } else {
+                        console.log("All segments completed");
                     }
-                    return;
-                }
-                console.log(`${intervalID} ${millsBetween} ${times} ${count}`);
-                count = count + 1;
-                document.getElementById('stepsRemainingDisplay').textContent = (countMax - count).toString();
-
-                if (isSoundOn) {
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const sound440 = createSound(audioContext, 440, 0.5);
-                    playSound(audioContext, sound440);
+                } else {
+                    // 继续当前段落的下一个节拍
+                    playWithInternal(listOfMillsAndTimes, currentSegmentIndex, nextBeatCount);
                 }
             }, millsBetween);
         }
-
         document.getElementById('playButton').addEventListener('click', () => {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const sound440 = createSound(audioContext, 440, 0.5);
-
             playSound(audioContext, sound440);
-
-            playWithInternal(dealArray);
-
+            playWithInternal(dealArray, 0, 0);
         });
         document.getElementById('readButton').addEventListener('click', () => {
             const inputValue = document.getElementById('inputBox').value;
@@ -196,7 +306,6 @@
             dealArray = parseInput(inputValue);
             console.log(dealArray);
         });
-
         document.getElementById('toggleSoundButton').addEventListener('click', () => {
             const toggleButton = document.getElementById('toggleSoundButton');
             if (isSoundOn) {
@@ -210,8 +319,21 @@
             console.log('声音开关状态:', isSoundOn ? '开' : '关');
             dealArray = [..._default];
         });
-
-
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowUp') {
+                bpm += 1;
+                document.getElementById('up-key').classList.add('active');
+            } else if (event.key === 'ArrowRight') {
+                bpm += 10;
+                document.getElementById('up-key').classList.add('active');
+            } else if (event.key === 'ArrowDown') {
+                bpm -= 1;
+                document.getElementById('down-key').classList.add('active');
+            } else if (event.key === 'ArrowLeft') {
+                bpm -= 10;
+                document.getElementById('down-key').classList.add('active');
+            }
+        });
     </script>
 </body>
 
