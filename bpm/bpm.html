@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self';
+        style-src 'self' 'unsafe-inline';
+        script-src 'self' 'unsafe-inline'">
     <link rel="icon" href="data:,">
     <meta property="og:url" content="https://pages.certseeds.com/bpm/bpm.html">
     <meta property="og:site_name" content="Programmable-BPM">
@@ -118,10 +119,15 @@
     <button id="playButton">播放声音</button>
     <div class="display">BPM: <span id="bpmDisplay">60</span></div>
     <div class="display">剩余步数: <span id="stepsRemainingDisplay">0</span></div>
+    <div class="display">慢速模式: <span id="slowStepsDisplay" style="color: #28a745;
+        font-weight: bold;">关闭</span></div>
     <!-- 新增：显示 listOfMillsAndTimes 的列表 -->
     <div class="display">
         <div>当前序列:</div>
-        <ul id="sequenceList" style="text-align: left; max-width: 400px; margin: 10px auto; font-size: 14px;">
+        <ul id="sequenceList" style="text-align: left;
+        max-width: 400px;
+        margin: 10px auto;
+        font-size: 14px;">
             <!-- 动态生成的列表项 -->
         </ul>
     </div>
@@ -137,10 +143,25 @@
             mills: 1000,
             times: 60
         }];// 默认节奏
+        let slowSteps = false;
         let dealArray = [..._default];
         let bpm = 60;
         let remain = 0;
         const multiply = bpm * 1000;
+
+        // 更新慢速模式显示
+        const updateSlowStepsDisplay = function () {
+            const slowStepsDisplay = document.getElementById('slowStepsDisplay');
+            if (slowSteps) {
+                slowStepsDisplay.textContent = '开启';
+                slowStepsDisplay.style.color = '#dc3545';
+                // 红色表示开启
+            } else {
+                slowStepsDisplay.textContent = '关闭';
+                slowStepsDisplay.style.color = '#28a745';
+                // 绿色表示关闭
+            }
+        };
         const parseInput = function (text) {
             const lines = text.split('\n');
             const result = lines
@@ -157,19 +178,18 @@
                     };
                 });
             return result;
-        }
-
-        // 更新序列列表显示，包含剩余步数信息
+        }        // 更新序列列表显示，包含剩余步数信息
         const updateSequenceList = function (allSegments, currentIndex, remainingStepsArray) {
             const sequenceList = document.getElementById('sequenceList');
             sequenceList.innerHTML = '';
 
             allSegments.forEach((item, index) => {
                 const li = document.createElement('li');
-                const bpm = (60000 / item.mills).toFixed(1);
+                const baseBpm = (60000 / item.mills).toFixed(1);
+                const displayBpm = slowSteps && index === currentIndex ? (baseBpm / 2).toFixed(1) : baseBpm;
                 const minutes = (item.times * item.mills / 60000).toFixed(2);
 
-                let displayText = `第${index + 1}段: BPM ${bpm}, 时长 ${minutes}分钟`;
+                let displayText = `第${index + 1}段: BPM ${displayBpm}${slowSteps && index === currentIndex ? ' (慢速)' : ''}, 时长 ${minutes}分钟`;
 
                 if (index < currentIndex) {
                     // 已完成的段落
@@ -208,7 +228,9 @@
             const P = 200 / T;
             const O = 500 / T;
 
-            for (let Q = 0; Q < M; Q++) {
+            for (let Q = 0;
+                Q < M;
+                Q++) {
                 e[Q] = N * (0.09 * Math.exp(-Q * R) * Math.sin(S * Q) + 0.34 * Math.exp(-Q * P) * Math.sin(2 * S * Q) + 0.57 * Math.exp(-Q * O) * Math.sin(6 * S * Q));
             } return L;
         };
@@ -247,12 +269,15 @@
             }
 
             const currentSegment = listOfMillsAndTimes[currentSegmentIndex];
-            const { mills: millsBetween, times } = currentSegment;
-
-            // 如果是新段落的开始
+            let { mills: millsBetween, times } = currentSegment;
+            if (slowSteps) {
+                millsBetween *= 2;
+                // 如果按下了慢速键，则将节拍间隔加倍
+            }            // 如果是新段落的开始
             if (currentBeatCount === 0) {
                 console.log(`Starting segment ${currentSegmentIndex}:`, currentSegment);
-                document.getElementById('bpmDisplay').textContent = (60000 / millsBetween).toFixed(2);
+                const displayBpm = slowSteps ? (60000 / millsBetween).toFixed(2) : (60000 / currentSegment.mills).toFixed(2);
+                document.getElementById('bpmDisplay').textContent = displayBpm;
                 isLocked = true;
             }
 
@@ -267,8 +292,11 @@
             }
 
             // 计算剩余步数：当前段的剩余步数 + 后续段的总步数
-            const remainingSteps = [times - currentBeatCount - 1]; // 当前段剩余步数
-            for (let i = currentSegmentIndex + 1; i < listOfMillsAndTimes.length; i++) {
+            const remainingSteps = [times - currentBeatCount - 1];
+            // 当前段剩余步数
+            for (let i = currentSegmentIndex + 1;
+                i < listOfMillsAndTimes.length;
+                i++) {
                 remainingSteps.push(listOfMillsAndTimes[i].times);
             }
 
@@ -320,19 +348,33 @@
             dealArray = [..._default];
         });
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'ArrowUp') {
-                bpm += 1;
-                document.getElementById('up-key').classList.add('active');
-            } else if (event.key === 'ArrowRight') {
-                bpm += 10;
-                document.getElementById('up-key').classList.add('active');
-            } else if (event.key === 'ArrowDown') {
-                bpm -= 1;
-                document.getElementById('down-key').classList.add('active');
-            } else if (event.key === 'ArrowLeft') {
-                bpm -= 10;
-                document.getElementById('down-key').classList.add('active');
+            if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+                const wasSlowSteps = slowSteps;
+                slowSteps = true;
+                updateSlowStepsDisplay();
+
+                // 如果状态改变且正在播放，立即更新BPM显示
+                if (!wasSlowSteps && isLocked) {
+                    const currentBpm = parseFloat(document.getElementById('bpmDisplay').textContent);
+                    document.getElementById('bpmDisplay').textContent = (currentBpm / 2).toFixed(2);
+                }
+                console.log('慢速模式:', slowSteps ? '开启' : '关闭');
+            } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+                const wasSlowSteps = slowSteps;
+                slowSteps = false;
+                updateSlowStepsDisplay();
+
+                // 如果状态改变且正在播放，立即更新BPM显示
+                if (wasSlowSteps && isLocked) {
+                    const currentBpm = parseFloat(document.getElementById('bpmDisplay').textContent);
+                    document.getElementById('bpmDisplay').textContent = (currentBpm * 2).toFixed(2);
+                } console.log('慢速模式:', slowSteps ? '开启' : '关闭');
             }
+        });
+
+        // 页面加载时初始化显示
+        document.addEventListener('DOMContentLoaded', function () {
+            updateSlowStepsDisplay();
         });
     </script>
 </body>
