@@ -228,11 +228,12 @@
             const P = 200 / T;
             const O = 500 / T;
 
-            for (let Q = 0;
-                Q < M;
-                Q++) {
-                e[Q] = N * (0.09 * Math.exp(-Q * R) * Math.sin(S * Q) + 0.34 * Math.exp(-Q * P) * Math.sin(2 * S * Q) + 0.57 * Math.exp(-Q * O) * Math.sin(6 * S * Q));
-            } return L;
+            for (let Q = 0; Q < M; Q++) {
+                e[Q] = N * (0.09 * Math.exp(-Q * R) * Math.sin(S * Q)
+                    + 0.34 * Math.exp(-Q * P) * Math.sin(2 * S * Q)
+                    + 0.57 * Math.exp(-Q * O) * Math.sin(6 * S * Q));
+            }
+            return L;
         };
 
         // And again, it just works.
