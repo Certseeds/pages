@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robots.txt Tester</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; background-color: #f4f4f4; color: #333; }
+        #app { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #1a1a1a; }
+        textarea, input { width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        textarea { height: 200px; resize: vertical; }
+        button { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #results { margin-top: 20px; }
+        .result { padding: 10px; border-left: 4px solid #ccc; margin-bottom: 10px; }
+        .result.allowed { border-left-color: #28a745; }
+        .result.disallowed { border-left-color: #dc3545; }
+        .loading, .error { color: #777; }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "vue": "https://cdn.jsdelivr.net/npm/vue@3/dist/vue.esm-browser.js",
+            "@nanoseeds/google-robotstxt-wasm": "https://cdn.jsdelivr.net/npm/@nanoseeds/google-robotstxt-wasm@0.0.1/robots_wasm_api.js"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="app">
+        <h1>Robots.txt Tester</h1>
+        <p class="loading" v-if="isLoading">Loading WASM module...</p>
+        <p class="error" v-if="error">{{ error }}</p>
+        <div v-if="!isLoading && !error">
+            <label for="robotsContent">robots.txt content:</label>
+            <textarea id="robotsContent" v-model="robotsContent"></textarea>
+            
+            <label for="userAgent">User-agent:</label>
+            <input type="text" id="userAgent" v-model="userAgent">
+            
+            <label for="url">URL to check:</label>
+            <input type="text" id="url" v-model="url">
+            
+            <button @click="checkAccess" :disabled="!isReady">Check Access</button>
+            
+            <div id="results" v-if="results.length > 0">
+                <h2>Results:</h2>
+                <div v-for="result in results" :class="['result', result.allowed ? 'allowed' : 'disallowed']">
+                    <p><strong>URL:</strong> {{ result.url }}</p>
+                    <p><strong>User-agent:</strong> {{ result.userAgent }}</p>
+                    <p><strong>Allowed:</strong> {{ result.allowed }}</p>
+                    <p v-if="result.matchingLineNumber > 0">
+                        <strong>Matching Rule (Line {{ result.matchingLineNumber }}):</strong> <code>{{ result.matchingLineContent }}</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createApp, ref, onMounted, computed } from 'vue';
+        import { RobotsMatcher } from '@nanoseeds/google-robotstxt-wasm';
+
+        createApp({
+            setup() {
+                const isLoading = ref(true);
+                const error = ref(null);
+                const robotsContent = ref(`User-agent: *
+Disallow: /private/
+Disallow: /admin
+
+User-agent: MyGoodBot
+Allow: /private/`);
+                const userAgent = ref('MyCoolBot');
+                const url = ref('https://example.com/private/page.html');
+                const results = ref([]);
+                let matcher = null;
+
+                onMounted(async () => {
+                    try {
+                        console.log('Attempting to load WASM module...');
+                        matcher = await RobotsMatcher.create();
+                        console.log('WASM module loaded successfully.');
+                        isLoading.value = false;
+                    } catch (e) {
+                        console.error('Error loading WASM module:', e);
+                        error.value = `Failed to load WASM module. Please check browser compatibility and network connection. Details: ${e.message}`;
+                        isLoading.value = false;
+                    }
+                });
+
+                const isReady = computed(() => {
+                    return !isLoading.value && robotsContent.value.trim() !== '' && userAgent.value.trim() !== '' && url.value.trim() !== '';
+                });
+
+                function checkAccess() {
+                    if (!matcher || !isReady.value) return;
+                    try {
+                        const allowed = matcher.isAllowed(robotsContent.value, userAgent.value, url.value);
+                        const matchingLineNumber = matcher.getMatchingLine();
+                        let matchingLineContent = '';
+                        if (matchingLineNumber > 0) {
+                            const lines = robotsContent.value.split('\n');
+                            matchingLineContent = lines[matchingLineNumber - 1] || 'N/A';
+                        }
+
+                        results.value.unshift({
+                            url: url.value,
+                            userAgent: userAgent.value,
+                            allowed: allowed,
+                            matchingLineNumber: matchingLineNumber,
+                            matchingLineContent: matchingLineContent
+                        });
+                    } catch (e) {
+                        console.error('Error during access check:', e);
+                        error.value = `An error occurred during check: ${e.message}`;
+                    }
+                }
+
+                return {
+                    isLoading,
+                    error,
+                    robotsContent,
+                    userAgent,
+                    url,
+                    results,
+                    isReady,
+                    checkAccess
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
+
